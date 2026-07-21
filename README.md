@@ -96,7 +96,7 @@ go run . -subject "the AI agent memory / context platform market"
 go run .
 go run . -verbose                          # show observations, dedup decisions, receipts
 go run . -show                             # print the entity graph + run timeline, then exit
-go run . -provider gemini                  # force a provider regardless of which keys are set
+go run . -provider gemini                  # force provider regardless of which keys are set
 go run . -max-items 12 -dedup-distance 0.1 # more items per run; stricter "already known"
 go run . -endpoint http://127.0.0.1:8090   # against a local proxy instead
 go run . -region us-central1               # pin the agent's home region (or $JENNAH_REGION)
