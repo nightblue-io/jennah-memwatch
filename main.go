@@ -1,12 +1,11 @@
 // Command memwatch is a demo agent: an AUTONOMOUS market/competitor WATCHER that
 // runs UNATTENDED ON A SCHEDULE (cron) and consumes Jennah's public memory APIs
 // exactly the way any external agent would — plain HTTP/JSON through the
-// jennah-proxy gateway, authenticated with a jennah_sk_ API key. Like its sibling
-// memchat it is a standalone Go module (its own go.mod, not part of the server
-// build), so it models a real outside consumer and keeps the LLM SDK dependencies
-// out of the server tree.
+// jennah-proxy gateway, authenticated with a jennah_sk_ API key. It is a
+// standalone Go module (its own go.mod, not part of the server build), so it
+// models a real outside consumer and keeps the LLM SDK dependencies out of the
+// server tree.
 //
-// Where memchat is a REACTIVE chatbot (a human speaks, it recalls, it replies),
 // memwatch is PROACTIVE and headless: you give it a subject to watch and walk
 // away. Each run it observes what's noteworthy now, DIFFS that against what it has
 // already recorded in Jennah, and reports only WHAT'S NEW SINCE THE LAST RUN. The

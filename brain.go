@@ -9,8 +9,8 @@ import (
 
 // brain is the pluggable observing LLM. Given a subject to watch and the entities
 // already tracked, it reports notable developments as structured observations.
-// Unlike memchat's brain it holds no conversation history — each run is a fresh,
-// unattended observation. Everything Jennah-facing is identical regardless of which
+// It holds no conversation history — each run is a fresh, unattended
+// observation. Everything Jennah-facing is identical regardless of which
 // brain answers; only the LLM differs — that's the point of the demo.
 type brain interface {
 	observe(ctx context.Context, subject string, known []string, maxItems int) (observations, error)

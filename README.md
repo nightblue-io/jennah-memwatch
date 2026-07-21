@@ -4,18 +4,17 @@ A small demo **agent** that consumes Jennah's public memory APIs the way any
 external agent would: plain HTTP/JSON through the `jennah-proxy` gateway,
 authenticated with a `jennah_sk_` API key. No Jennah server internals are
 imported - this is a standalone Go module, so it doubles as a reference for
-outside integrators. Sibling to [`memchat`](../jennah-memchat).
+outside integrators.
 
-Where **memchat** is *reactive* - a human speaks, it recalls, it replies -
 **memwatch** is *proactive and headless*. You give it a subject to watch and walk
 away. Run it on a cron; each run it observes what's noteworthy now, **diffs that
 against what it already recorded in Jennah**, and reports only **what's new since
 the last run**. The entity graph accretes across runs and the execution log
 becomes a run-by-run timeline.
 
-That's the pitch a chatbot can't make: **Jennah is the durable brain an unattended
-agent runs its entire life against.** Kill it, cron it, resume it days later - it
-never re-reports what it already knows.
+The point it makes: **Jennah is the durable brain an unattended agent runs its
+entire life against.** Kill it, cron it, resume it days later - it never
+re-reports what it already knows.
 
 ## What it does each run
 
