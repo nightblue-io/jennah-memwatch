@@ -27,7 +27,9 @@
 //  4. memory:commit — the NEW items as vector chunks, their entities/relations as
 //     graph nodes/edges (plus subject-[MENTIONS]->entity so a traversal from the
 //     anchor enumerates the whole watch list), and one run record to the log — all
-//     atomically.
+//     atomically. The receipt is CHECKED, not discarded: it names any chunk the
+//     embedding model truncated, which degrades both recall and the dedup in step 3
+//     (see printReceipt).
 //
 // Cross-run memory is simply reusing the same agent_instance_id, persisted to a
 // small state file. -show prints the accumulated graph and timeline without
@@ -353,9 +355,17 @@ func commitRun(ctx context.Context, jc *jennahClient, agentID, subject string, f
 		}
 	}
 
+	// chunkID -> headline, so a truncation report from the receipt can name the
+	// DEVELOPMENT that was too long rather than an opaque random chunk id (see
+	// printReceipt). A watcher runs unattended, so the warning has to be actionable
+	// without someone going and looking the id up.
+	headlineOf := map[string]string{}
+
 	for _, it := range fresh {
+		chunkID := randID("chunk")
+		headlineOf[chunkID] = it.Headline
 		vectors = append(vectors, &agentpb.VectorChunk{
-			ChunkId:    randID("chunk"),
+			ChunkId:    chunkID,
 			RawContent: it.Headline + "\n" + it.Detail,
 		})
 		// Every named entity is linked to the subject anchor so a traversal from it
@@ -402,7 +412,7 @@ func commitRun(ctx context.Context, jc *jennahClient, agentID, subject string, f
 	if err != nil {
 		return err
 	}
-	printReceipt(resp)
+	printReceipt(resp, headlineOf)
 	return nil
 }
 
@@ -498,13 +508,43 @@ func commit(ctx context.Context, jc *jennahClient, agentID string, req *agentpb.
 	return &resp, err
 }
 
-func printReceipt(r *agentpb.CommitMemoryResponse) {
+// printReceipt logs the commit counts and, crucially, acts on the receipt's
+// truncation report. headlineOf maps the run's chunk ids to the development each
+// one carried, so a warning can name the item rather than a random chunk id.
+func printReceipt(r *agentpb.CommitMemoryResponse, headlineOf map[string]string) {
 	ts := "?"
 	if t := r.GetCommitTimestamp(); t != nil {
 		ts = t.AsTime().UTC().Format(time.RFC3339)
 	}
 	vlog("committed: log=%d vec=%d nodes=%d edges=%d @ %s",
 		r.GetExecutionLogRows(), r.GetVectorRows(), r.GetGraphNodeRows(), r.GetGraphEdgeRows(), ts)
+
+	// The commit SUCCEEDED, but the embedding model truncated content past its
+	// input limit (~2048 tokens): the chunk's text is stored in full while its
+	// vector covers only the beginning. For a watcher this is worse than it sounds,
+	// because the SAME truncated prefix is what future runs compare against when
+	// deciding whether a development is new (see nearestDistance) — so a long item
+	// is both hard to recall AND a weaker dedup anchor.
+	//
+	// Written to STDERR, not stdout, and never gated behind -verbose: a watcher runs
+	// unattended on a schedule, so the only way this gets noticed is if it lands
+	// where cron mail and log collectors look for problems.
+	//
+	// reject_on_truncation is deliberately NOT set. A watcher that drops a whole
+	// run because one article ran long would lose the other developments in it and
+	// silently skip that window entirely; a degraded chunk plus a loud warning is
+	// the better trade here. Splitting long details into multiple chunks is the
+	// real fix if this fires often.
+	if ids := r.GetTruncatedChunkIds(); len(ids) > 0 {
+		for _, id := range ids {
+			what := headlineOf[id]
+			if what == "" {
+				what = "(unknown item)"
+			}
+			fmt.Fprintf(os.Stderr, "[memory warning] development too long to embed in full, "+
+				"recall and dedup will only see its beginning: %s (chunk %s)\n", singleLine(what), id)
+		}
+	}
 }
 
 // ---- HTTP client (protojson over the gateway, Bearer auth) ----
