@@ -80,6 +80,14 @@ var verbose bool
 // re-sent (graph nodes are insert-only server-side).
 const subjectNode = "subject"
 
+// demoPrefix namespaces every workspace this demo creates under a "demo." subtree.
+// '.' is the agent-selector hierarchy separator server-side, and selector matching
+// is segment-anchored, so one role selector "demo.*" reaches every id minted here
+// (and nothing else). That keeps a demo run scopable to a throwaway role instead of
+// needing blanket agent access. Only interior '.' is legal in an agent id, so the
+// prefix must be followed by a real name — never used on its own.
+const demoPrefix = "demo."
+
 func main() {
 	var (
 		endpoint     = flag.String("endpoint", envOr("JENNAH_ENDPOINT", "https://jennah.alphaus.cloud"), "Jennah proxy origin (http/https)")
@@ -487,7 +495,7 @@ func showState(ctx context.Context, jc *jennahClient, agentID, subject string) e
 // region ("" = platform default); it's honored only at creation time because an
 // agent instance is pinned to one home region for its lifetime.
 func createAgent(ctx context.Context, jc *jennahClient, region string) (string, error) {
-	id := randID("agent")
+	id := demoPrefix + randID("memwatch")
 	var resp agentpb.CreateAgentResponse
 	if _, err := jc.do(ctx, http.MethodPost, "/v1/agents", &agentpb.CreateAgentRequest{
 		AgentInstanceId: id,

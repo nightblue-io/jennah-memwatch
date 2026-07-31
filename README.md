@@ -46,6 +46,10 @@ Cross-run memory is just **reusing the same `agent_instance_id`**, persisted to
 entity re-seen on a later run just converges instead of fragmenting - the client
 keeps no id ledger.
 
+New workspaces are created as `demo.memwatch_<random>`. `.` is the agent-selector
+separator, and selector matching is segment-anchored, so a role carrying the single
+selector `demo.*` reaches every workspace this demo mints - and nothing else.
+
 > **Where the "news" comes from.** For a self-contained demo the developments come
 > from the chat model itself (LLM-as-source). A real deployment swaps a web-search /
 > RSS / news API in at the `brain.observe` seam - every Jennah memory call stays
