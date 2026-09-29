@@ -11,7 +11,7 @@ import (
 
 // anthropicModel keeps the demo snappy and cheap; swap to
 // anthropic.ModelClaudeOpus4_8 for maximum capability.
-const anthropicModel = anthropic.Model("claude-sonnet-5")
+const anthropicModel = anthropic.Model("claude-sonnet-5-5")
 
 // anthropicBrain is the Claude backend. Each observe call is a single, stateless
 // request that FORCES the report_developments tool, so the reply is always the

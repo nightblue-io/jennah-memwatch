@@ -109,7 +109,7 @@ go run . -region us-central1               # pin the agent's home region (or $JE
 On start it prints the chosen brain and the last run, e.g.:
 
 ```
-chat model: anthropic/claude-sonnet-5
+chat model: anthropic/claude-sonnet-5-5
 watching "the AI agent memory / context platform market" — last run 2026-07-22T06:00:11Z
 
 3 new since last run:
@@ -142,7 +142,7 @@ Each firing appends a run to the log and only surfaces genuinely new development
 
 ## Notes
 
-- Each provider defaults to a snappy/cheap model (`claude-sonnet-5`,
+- Each provider defaults to a snappy/cheap model (`claude-sonnet-5-5`,
   `gemini-3.8-flash`); edit `anthropicModel` in `brain_anthropic.go`
   (→ `anthropic.ModelClaudeOpus4_8`) or `geminiModel` in `brain_gemini.go`
   (→ `gemini-2.5-pro`) for max capability. Backends live behind the `brain`
