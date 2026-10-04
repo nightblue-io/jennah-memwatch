@@ -88,32 +88,45 @@ server embed it.
 ```sh
 export JENNAH_API_KEY=jennah_sk_...
 
-# first run: name the subject (remembered thereafter). Anthropic:
+# first run: name the subject (remembered thereafter).
+# Anthropic:
 export ANTHROPIC_API_KEY=sk-ant-...
-go run . -subject "the AI agent memory / context platform market"
+go run . \
+  -subject "the AI agent memory / context platform market"
 
-# …or Claude on Amazon Bedrock (named AWS profile; -aws-region defaults to ap-northeast-1):
-go run . -provider bedrock -aws-profile my-profile -subject "the AI agent memory / context platform market"
+# …or Claude on Amazon Bedrock (named AWS profile;
+# -aws-region defaults to ap-northeast-1):
+go run . -provider bedrock -aws-profile my-profile \
+  -subject "the AI agent memory / context platform market"
 
 # …or Gemini via Vertex AI (GCP project + ADC, no API key):
-gcloud auth application-default login          # once
+gcloud auth application-default login   # once
 export GOOGLE_GENAI_USE_VERTEXAI=true
 export GOOGLE_CLOUD_PROJECT=my-gcp-project
-export GOOGLE_CLOUD_LOCATION=us-central1       # optional; defaults to "global"
-go run . -subject "the AI agent memory / context platform market"
+# optional; defaults to "global"
+export GOOGLE_CLOUD_LOCATION=us-central1
+go run . \
+  -subject "the AI agent memory / context platform market"
 
 # …or Gemini via Google AI Studio (API key):
-export GEMINI_API_KEY=...        # or GOOGLE_API_KEY
-go run . -subject "the AI agent memory / context platform market"
+export GEMINI_API_KEY=...   # or GOOGLE_API_KEY
+go run . \
+  -subject "the AI agent memory / context platform market"
 
 # subsequent runs: subject is remembered, just run it again
 go run .
-go run . -verbose                          # show observations, dedup decisions, receipts
-go run . -show                             # print the entity graph + run timeline, then exit
-go run . -provider gemini                  # force provider regardless of which keys are set
-go run . -max-items 12 -dedup-distance 0.1 # more items per run; stricter "already known"
-go run . -endpoint http://127.0.0.1:8090   # against a local proxy instead
-go run . -region us-central1               # pin the agent's home region (or $JENNAH_REGION)
+# show observations, dedup decisions, receipts
+go run . -verbose
+# print the entity graph + run timeline, then exit
+go run . -show
+# force provider regardless of which keys are set
+go run . -provider gemini
+# more items per run; stricter "already known"
+go run . -max-items 12 -dedup-distance 0.1
+# against a local proxy instead
+go run . -endpoint http://127.0.0.1:8090
+# pin the agent's home region (or $JENNAH_REGION)
+go run . -region us-central1
 ```
 
 On start it prints the chosen brain and the last run, e.g.:
