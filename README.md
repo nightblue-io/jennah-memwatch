@@ -60,12 +60,19 @@ selector `demo.*` reaches every workspace this demo mints - and nothing else.
 1. A Jennah API key for an **approved, entitled** enterprise. Mint one after
    logging in (console or `jnh`):
    `POST /v1/apikeys {"label":"memwatch"}` → copy the `secret` (shown once).
-2. A chat model - Anthropic, or Gemini (via **Google AI Studio** with an API key,
-   or via **Vertex AI** with a GCP project + ADC).
+2. A chat model - Anthropic directly, Claude on **Amazon Bedrock** (AWS
+   credentials allowed to call `bedrock:InvokeModel` on the
+   `global.anthropic.claude-sonnet-5-5` inference profile), or Gemini (via
+   **Vertex AI** with a GCP project + ADC, or via **Google AI Studio** with an
+   API key).
 
 The observing brain is pluggable: only the LLM differs, every Jennah memory call is
 identical. `-provider auto` (the default) picks **Anthropic** when an Anthropic key
-is configured, otherwise **Gemini**; force it with `-provider gemini|anthropic`.
+is configured, otherwise **Gemini**; force it with
+`-provider anthropic|bedrock|gemini`. Bedrock is never picked by `auto`; pass
+its AWS profile with `-aws-profile` rather than `AWS_PROFILE`, which an exported
+`AWS_ACCESS_KEY_ID` silently overrides. On Bedrock the model is the same, served
+through the `global.anthropic.claude-sonnet-5-5` inference profile.
 Within Gemini, Vertex is used when `GOOGLE_GENAI_USE_VERTEXAI=true` or when
 `GOOGLE_CLOUD_PROJECT` is set and no Studio key is present.
 
@@ -85,15 +92,18 @@ export JENNAH_API_KEY=jennah_sk_...
 export ANTHROPIC_API_KEY=sk-ant-...
 go run . -subject "the AI agent memory / context platform market"
 
-# …or Gemini via Google AI Studio (API key):
-export GEMINI_API_KEY=...        # or GOOGLE_API_KEY
-go run . -subject "the AI agent memory / context platform market"
+# …or Claude on Amazon Bedrock (named AWS profile; -aws-region defaults to ap-northeast-1):
+go run . -provider bedrock -aws-profile my-profile -subject "the AI agent memory / context platform market"
 
 # …or Gemini via Vertex AI (GCP project + ADC, no API key):
 gcloud auth application-default login          # once
 export GOOGLE_GENAI_USE_VERTEXAI=true
 export GOOGLE_CLOUD_PROJECT=my-gcp-project
 export GOOGLE_CLOUD_LOCATION=us-central1       # optional; defaults to "global"
+go run . -subject "the AI agent memory / context platform market"
+
+# …or Gemini via Google AI Studio (API key):
+export GEMINI_API_KEY=...        # or GOOGLE_API_KEY
 go run . -subject "the AI agent memory / context platform market"
 
 # subsequent runs: subject is remembered, just run it again
@@ -110,7 +120,7 @@ On start it prints the chosen brain and the last run, e.g.:
 
 ```
 chat model: anthropic/claude-sonnet-5-5
-watching "the AI agent memory / context platform market" — last run 2026-07-22T06:00:11Z
+watching "the AI agent memory / context platform market" (last run 2026-07-22T06:00:11Z)
 
 3 new since last run:
   • Foo raises Series B to expand its agent-memory offering

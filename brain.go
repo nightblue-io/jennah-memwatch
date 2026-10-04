@@ -9,9 +9,9 @@ import (
 
 // brain is the pluggable observing LLM. Given a subject to watch and the entities
 // already tracked, it reports notable developments as structured observations.
-// It holds no conversation history — each run is a fresh, unattended
+// It holds no conversation history: each run is a fresh, unattended
 // observation. Everything Jennah-facing is identical regardless of which
-// brain answers; only the LLM differs — that's the point of the demo.
+// brain answers; only the LLM differs, and that's the point of the demo.
 type brain interface {
 	observe(ctx context.Context, subject string, known []string, maxItems int) (observations, error)
 	label() string // short "provider/model" string for the startup banner
@@ -24,7 +24,7 @@ type observations struct {
 
 // The report_developments tool, described once and mapped into each SDK's own tool
 // type so the two backends stay in lockstep. The model is FORCED to call it, so its
-// arguments ARE the structured output — there is no free-text path. LLM-as-source
+// arguments ARE the structured output; there is no free-text path. LLM-as-source
 // here keeps the demo standalone; a real deployment would fill these from a
 // web-search / RSS / news API instead (see the README).
 const (
@@ -44,11 +44,15 @@ const (
 )
 
 // newBrain selects the observing provider. "auto" prefers Anthropic when an
-// Anthropic key is present, else Gemini — so someone with only one key set just
+// Anthropic key is present, else Gemini, so someone with only one key set just
 // runs `go run .`. anthropicKey, when non-empty, is the Anthropic API key from
 // -anthropic-api-key (already defaulted to $ANTHROPIC_API_KEY); it overrides the
 // SDK's own env lookup.
-func newBrain(ctx context.Context, provider, anthropicKey string) (brain, error) {
+//
+// "bedrock" is Claude on Amazon Bedrock, using aws (region and profile). It is
+// never chosen by "auto": AWS credentials are present in many shells for reasons
+// that have nothing to do with this demo, so having them is no sign of intent.
+func newBrain(ctx context.Context, provider, anthropicKey string, aws awsTarget) (brain, error) {
 	if provider == "auto" {
 		switch {
 		case anthropicKey != "":
@@ -56,17 +60,29 @@ func newBrain(ctx context.Context, provider, anthropicKey string) (brain, error)
 		case os.Getenv("GEMINI_API_KEY") != "" || os.Getenv("GOOGLE_API_KEY") != "" || useVertexAI():
 			provider = "gemini"
 		default:
-			return nil, fmt.Errorf("no chat credentials found: set GEMINI_API_KEY / Vertex AI env (Gemini) or pass -anthropic-api-key / set ANTHROPIC_API_KEY (Anthropic), or pass -provider")
+			return nil, fmt.Errorf("no chat credentials found: pass -anthropic-api-key / set ANTHROPIC_API_KEY (Anthropic), pass -provider bedrock (Claude on Amazon Bedrock, explicit only), or set Vertex AI env / GEMINI_API_KEY (Gemini)")
 		}
 	}
 	switch strings.ToLower(provider) {
-	case "gemini":
-		return newGeminiBrain(ctx)
 	case "anthropic", "claude":
 		return newAnthropicBrain(anthropicKey), nil
+	case "bedrock":
+		if aws.region == "" {
+			return nil, fmt.Errorf("-provider bedrock needs an AWS region: pass -aws-region")
+		}
+		return newBedrockBrain(ctx, aws.region, aws.profile), nil
+	case "gemini":
+		return newGeminiBrain(ctx)
 	default:
-		return nil, fmt.Errorf("unknown -provider %q (want auto|gemini|anthropic)", provider)
+		return nil, fmt.Errorf("unknown -provider %q (want auto|anthropic|bedrock|gemini)", provider)
 	}
+}
+
+// awsTarget is where -provider bedrock sends requests: the AWS region, and the
+// named profile whose credentials sign them (empty uses the default chain).
+type awsTarget struct {
+	region  string
+	profile string
 }
 
 // observePrompt builds the shared system/user prompt both backends send. Passing
@@ -81,7 +97,7 @@ func observePrompt(subject string, known []string, maxItems int) (system, user s
 	var b strings.Builder
 	fmt.Fprintf(&b, "Subject to watch: %s\n\n", subject)
 	if len(known) == 0 {
-		b.WriteString("You have not tracked any entities for this subject yet — this is the first run.\n")
+		b.WriteString("You have not tracked any entities for this subject yet. This is the first run.\n")
 	} else {
 		b.WriteString("Entities you already track (prefer developments that add to or go beyond these):\n")
 		for _, e := range known {

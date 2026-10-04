@@ -1,6 +1,6 @@
 // Command memwatch is a demo agent: an AUTONOMOUS market/competitor WATCHER that
 // runs UNATTENDED ON A SCHEDULE (cron) and consumes Jennah's public memory APIs
-// exactly the way any external agent would — plain HTTP/JSON through the
+// exactly the way any external agent would: plain HTTP/JSON through the
 // jennah-proxy gateway, authenticated with a jennah_sk_ API key. It is a
 // standalone Go module (its own go.mod, not part of the server build), so it
 // models a real outside consumer and keeps the LLM SDK dependencies out of the
@@ -12,21 +12,21 @@
 // entity graph (companies / products / events and how they relate) accretes across
 // runs, and the execution log becomes a run-by-run timeline. That is the whole
 // pitch: Jennah is the durable brain an unattended agent runs its entire life
-// against — kill it, cron it, resume it days later, and it never re-reports what
+// against: kill it, cron it, resume it days later, and it never re-reports what
 // it already knows.
 //
 // Each run does query → observe → diff → commit:
 //
-//  1. memory:query (log, limit 1)  — when did I last run? (for the banner)
-//     memory:query (graph, 1 hop)  — which entities do I already track?
-//  2. brain.observe — the LLM reports notable developments about the subject
+//  1. memory:query (log, limit 1): when did I last run? (for the banner)
+//     memory:query (graph, 1 hop): which entities do I already track?
+//  2. brain.observe: the LLM reports notable developments about the subject
 //     (LLM-as-source here so the demo is standalone; a real deployment swaps in a
-//     web-search / RSS / news API at this seam — see the README).
-//  3. diff — each observed headline is semantic-queried against past chunks; if the
+//     web-search / RSS / news API at this seam; see the README).
+//  3. diff: each observed headline is semantic-queried against past chunks; if the
 //     nearest match is closer than -dedup-distance it's KNOWN and skipped, else NEW.
-//  4. memory:commit — the NEW items as vector chunks, their entities/relations as
+//  4. memory:commit: the NEW items as vector chunks, their entities/relations as
 //     graph nodes/edges (plus subject-[MENTIONS]->entity so a traversal from the
-//     anchor enumerates the whole watch list), and one run record to the log — all
+//     anchor enumerates the whole watch list), and one run record to the log, all
 //     atomically. The receipt is CHECKED, not discarded: it names any chunk the
 //     embedding model truncated, which degrades both recall and the dedup in step 3
 //     (see printReceipt).
@@ -38,9 +38,13 @@
 // Setup (Jennah key + one chat provider). Keys come from env or flags:
 //
 //	export JENNAH_API_KEY=jennah_sk_...      # from POST /v1/apikeys
-//	export ANTHROPIC_API_KEY=sk-ant-...      # Anthropic key, OR
-//	export GEMINI_API_KEY=...                # Google AI Studio key
+//	export ANTHROPIC_API_KEY=sk-ant-...      # Anthropic key
 //	go run . -subject "the AI agent memory / context platform market"
+//
+// -provider picks a backend explicitly instead: anthropic, bedrock (Claude on
+// Amazon Bedrock, signed with a named AWS profile: -provider bedrock
+// -aws-profile my-profile) or gemini (Vertex AI via GOOGLE_GENAI_USE_VERTEXAI=true,
+// GOOGLE_CLOUD_PROJECT and ADC, or a Google AI Studio GEMINI_API_KEY).
 //
 // The agent's home region can be chosen at first launch with -region (or
 // $JENNAH_REGION); it's applied only when the workspace is created, since an agent
@@ -85,14 +89,16 @@ const subjectNode = "subject"
 // is segment-anchored, so one role selector "demo.*" reaches every id minted here
 // (and nothing else). That keeps a demo run scopable to a throwaway role instead of
 // needing blanket agent access. Only interior '.' is legal in an agent id, so the
-// prefix must be followed by a real name — never used on its own.
+// prefix must be followed by a real name, never used on its own.
 const demoPrefix = "demo."
 
 func main() {
 	var (
 		endpoint     = flag.String("endpoint", envOr("JENNAH_ENDPOINT", "https://jennah.alphaus.cloud"), "Jennah proxy origin (http/https)")
 		statePath    = flag.String("state", "memwatch-state.json", "path to the local state file (agent id)")
-		provider     = flag.String("provider", "auto", "chat LLM: auto|gemini|anthropic (auto prefers Anthropic, else Gemini, by which API key is set)")
+		provider     = flag.String("provider", "auto", "chat LLM: auto|anthropic|bedrock|gemini (auto prefers Anthropic, else Gemini, by which API key is set; bedrock is Claude on Amazon Bedrock and is never picked by auto)")
+		awsRegion    = flag.String("aws-region", "ap-northeast-1", "AWS region for -provider bedrock")
+		awsProfile   = flag.String("aws-profile", "", "AWS named profile for -provider bedrock; empty uses the default credential chain. Prefer this over AWS_PROFILE, which exported AWS_ACCESS_KEY_ID silently overrides")
 		region       = flag.String("region", envOr("JENNAH_REGION", ""), "Jennah home region for the agent (e.g. us-central1); empty uses the platform default. Only applied when creating a new agent workspace. List regions with 'jnh agents regions'")
 		jennahKey    = flag.String("jennah-api-key", "", "Jennah API key (jennah_sk_...); falls back to $JENNAH_API_KEY")
 		anthropicKey = flag.String("anthropic-api-key", "", "Anthropic API key (sk-ant-...); falls back to $ANTHROPIC_API_KEY")
@@ -172,7 +178,7 @@ func main() {
 
 	// The one part that varies by provider: the observing brain. Everything else is
 	// provider-agnostic; the memory APIs don't care which LLM is thinking.
-	br, err := newBrain(ctx, *provider, *anthropicKey)
+	br, err := newBrain(ctx, *provider, *anthropicKey, awsTarget{region: *awsRegion, profile: *awsProfile})
 	if err != nil {
 		fatal("%v", err)
 	}
@@ -186,7 +192,7 @@ func main() {
 		lastStr = last
 	}
 	fmt.Printf("chat model: %s\n", br.label())
-	fmt.Printf("watching %q — last run %s\n", watched, lastStr)
+	fmt.Printf("watching %q (last run %s)\n", watched, lastStr)
 
 	if err := runOnce(ctx, jc, br, st.AgentID, watched, *maxItems, *dedupDist); err != nil {
 		if errors.Is(err, context.Canceled) {
@@ -309,7 +315,7 @@ func knownEntities(ctx context.Context, jc *jennahClient, agentID string) ([]str
 
 // nearestDistance runs a semantic query for headline and returns the cosine
 // distance of the closest past chunk (smaller = more similar). ok is false when
-// memory is empty (nothing to compare against — the item is necessarily new).
+// memory is empty (nothing to compare against, so the item is necessarily new).
 func nearestDistance(ctx context.Context, jc *jennahClient, agentID, headline string) (float64, bool, error) {
 	var resp agentpb.QueryMemoryResponse
 	if _, err := jc.do(ctx, http.MethodPost, memoryPath(agentID, "query"), &agentpb.QueryMemoryRequest{
@@ -425,7 +431,7 @@ func commitRun(ctx context.Context, jc *jennahClient, agentID, subject string, f
 }
 
 // showState prints the accumulated entity graph (a two-hop traversal from the
-// subject anchor) and the recent run timeline — a read-only snapshot of what the
+// subject anchor) and the recent run timeline: a read-only snapshot of what the
 // watcher has learned, with no observing.
 func showState(ctx context.Context, jc *jennahClient, agentID, subject string) error {
 	fmt.Printf("watching: %s\n", subject)
@@ -531,7 +537,7 @@ func printReceipt(r *agentpb.CommitMemoryResponse, headlineOf map[string]string)
 	// input limit (~2048 tokens): the chunk's text is stored in full while its
 	// vector covers only the beginning. For a watcher this is worse than it sounds,
 	// because the SAME truncated prefix is what future runs compare against when
-	// deciding whether a development is new (see nearestDistance) — so a long item
+	// deciding whether a development is new (see nearestDistance), so a long item
 	// is both hard to recall AND a weaker dedup anchor.
 	//
 	// Written to STDERR, not stdout, and never gated behind -verbose: a watcher runs
@@ -750,7 +756,7 @@ func envOr(key, def string) string {
 }
 
 // envOr2 returns val when it's non-empty (a flag was passed), otherwise the value
-// of env var key. Unlike envOr, the caller-supplied value wins — so an explicit
+// of env var key. Unlike envOr, the caller-supplied value wins, so an explicit
 // flag overrides the env var, and the env var is never a flag default (keeping
 // secrets out of -help).
 func envOr2(val, key string) string {

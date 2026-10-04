@@ -43,7 +43,7 @@ func newGeminiBrain(ctx context.Context) (*geminiBrain, error) {
 	if useVertexAI() {
 		// Vertex uses Application Default Credentials (run once:
 		//   gcloud auth application-default login
-		// or set GOOGLE_APPLICATION_CREDENTIALS to a service-account key) — no API
+		// or set GOOGLE_APPLICATION_CREDENTIALS to a service-account key), no API
 		// key. Project/location come from the standard GCP env vars.
 		project := os.Getenv("GOOGLE_CLOUD_PROJECT")
 		if project == "" {
